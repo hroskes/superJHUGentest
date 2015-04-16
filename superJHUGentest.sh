@@ -11,6 +11,7 @@ git fetch
 make clean
 git checkout -- .
 git pull
+make
 
 echo "===================="
 echo "=====Generation====="
@@ -59,6 +60,12 @@ cd ../../checklhe/
 echo "Pulling checklhe script..."
 git pull
 cd ../$dir
+echo "Setting up CMSSW area (needed for python version)..."
+export SCRAM_ARCH=slc6_amd64_gcc481
+scram p CMSSW CMSSW_7_1_14
+cd CMSSW_7_1_14/src
+eval $(scram ru -sh)
+cd ../..
 echo "Running checklhe..."
 python ../checklhe/checklhe.py *.lhe
 
@@ -67,10 +74,8 @@ echo "=====pythia====="
 echo "================"
 
 echo "Setting up pythia..."
-scram p CMSSW CMSSW_7_1_14
-cd CMSSW_7_1_14/src
-eval $(scram ru -sh)
 
+cd CMSSW_7_1_14/src
 mkdir -p Configuration/GenProduction/python/ThirteenTeV/
 cp ../../../forpythia/Hadronizer_TuneCUETP8M1_13TeV_generic_LHE_pythia8_Tauola_cff.py Configuration/GenProduction/python/ThirteenTeV/
 scram b
@@ -84,9 +89,6 @@ for a in *.lhe; do
     GENSIMfile=${a/.lhe/-GEN-SIM_py8.root} &&
     GENSIMcfg=${a/.lhe/-GEN-SIM_py8_cfg.py} &&
     GENSIMcfgtemplate=${GENSIMcfg/_cfg.py/_cfg_template.py} &&
-    nevents=$(grep "<event>" $lhefile | wc -l) &&
-    eventsperjob=100 &&
-    njobs=$(expr $nevents / $eventsperjob + 1) &&
     cmsDriver.py step1 --filein file:$lhefile --fileout file:$GENfile --mc --eventcontent LHE --datatier GEN --conditions MCRUN2_71_V1::All --step NONE --python_filename $GENcfg --no_exec --customise Configuration/DataProcessing/Utils.addMonitoring -n -1 &&
     cmsRun $GENcfg &&
     cmsDriver.py Configuration/GenProduction/python/ThirteenTeV/Hadronizer_TuneCUETP8M1_13TeV_generic_LHE_pythia8_Tauola_cff.py --filein file:$GENfile --fileout file:$GENSIMfile --mc --eventcontent RAWSIM --customise SLHCUpgradeSimulations/Configuration/postLS1Customs.customisePostLS1,Configuration/DataProcessing/Utils.addMonitoring --datatier GEN-SIM --conditions MCRUN2_71_V1::All --step GEN,SIM --magField 38T_PostLS1 --python_filename $GENSIMcfg --no_exec -n 10000 &&
