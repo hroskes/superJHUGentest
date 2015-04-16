@@ -1,0 +1,6 @@
+[submodule "JHUGen"]
+	path = JHUGen
+	url = git@github.com:TOPAZdevelop/JHUGen
+[submodule "checklhe"]
+	path = checklhe
+	url = git@github.com:hroskes/checklhe
