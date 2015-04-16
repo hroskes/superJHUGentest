@@ -1,5 +1,9 @@
-dir=JHUGentest_`date +%Y%m%d_%H%M%S`
-mkdir $dir
+if ! [ -d $1 ]; then
+    echo "superJHUGentest.sh needs an existing directory as an argument!"
+    exit 1
+fi
+
+dir=$1
 
 cd JHUGen/JHUGenerator
 echo "Getting the latest JHUGen version..."
@@ -72,8 +76,7 @@ cp ../../../forpythia/Hadronizer_TuneCUETP8M1_13TeV_generic_LHE_pythia8_Tauola_c
 scram b
 ln -s ../../*.lhe .
 
-for a in *.lhe
-do
+for a in *.lhe; do
     echo "Hadronizing $a..."
     lhefile=$a &&
     GENfile=${a/.lhe/-GEN.root} &&
