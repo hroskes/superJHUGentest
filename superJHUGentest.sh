@@ -2,29 +2,15 @@ dir=JHUGentest_`date +%Y%m%d_%H%M%S`
 mkdir $dir
 
 cd JHUGen/JHUGenerator
+echo "Getting the latest JHUGen version..."
 git fetch
 make clean
 git checkout -- .
+git pull
 
-#http://stackoverflow.com/questions/3258243/git-check-if-pull-needed
-LOCAL=$(git rev-parse @)
-REMOTE=$(git rev-parse @{u})
-BASE=$(git merge-base @ @{u})
-if [ $LOCAL = $REMOTE ]; then
-    echo "JHUGen is up to date"
-elif [ $LOCAL = $BASE ]; then
-    echo "Need to pull JHUGen..."
-    git pull -X theirs
-else
-    echo "Looks like there are local JHUGen commits!  Exiting."
-    exit 1
-fi
-
-echo "Recompiling JHUGen..."
-if ! make; then
-    echo "Couldn't compile JHUGen!  Exiting."
-    exit 1
-fi
+echo "===================="
+echo "=====Generation====="
+echo "===================="
 
 echo "Generating gg --> H --> ZZ..."
 ./JHUGen Collider=1 Process=0 VegasNc2=25 OffXVV=011 DecayMode1=9 DecayMode2=9 Unweighted=.true. DataFile=../../$dir/spin0_HZZ
@@ -61,9 +47,45 @@ echo "Generating bbH..."
 echo "Decaying bbH --> WW..."
 ./JHUGen ReadLHE=../../$dir/bbH.lhe DataFile=../../$dir/bbH_HWW DecayMode1=11 DecayMode2=11
 
+echo "=================="
+echo "=====checklhe====="
+echo "=================="
+
 cd ../../checklhe/
 echo "Pulling checklhe script..."
 git pull
 cd ../$dir
 echo "Running checklhe..."
 python ../checklhe/checklhe.py *.lhe
+
+echo "================"
+echo "=====pythia====="
+echo "================"
+
+echo "Setting up pythia..."
+scram p CMSSW CMSSW_7_1_14
+cd CMSSW_7_1_14/src
+eval $(scram ru -sh)
+
+mkdir -p Configuration/GenProduction/python/ThirteenTeV/
+cp ../../../forpythia/Hadronizer_TuneCUETP8M1_13TeV_generic_LHE_pythia8_Tauola_cff.py Configuration/GenProduction/python/ThirteenTeV/
+scram b
+ln -s ../../*.lhe .
+
+for a in *.lhe
+do
+    echo "Hadronizing $a..."
+    lhefile=$a &&
+    GENfile=${a/.lhe/-GEN.root} &&
+    GENcfg=${a/.lhe/-GEN_cfg.py} &&
+    GENSIMfile=${a/.lhe/-GEN-SIM_py8.root} &&
+    GENSIMcfg=${a/.lhe/-GEN-SIM_py8_cfg.py} &&
+    GENSIMcfgtemplate=${GENSIMcfg/_cfg.py/_cfg_template.py} &&
+    nevents=$(grep "<event>" $lhefile | wc -l) &&
+    eventsperjob=100 &&
+    njobs=$(expr $nevents / $eventsperjob + 1) &&
+    cmsDriver.py step1 --filein file:$lhefile --fileout file:$GENfile --mc --eventcontent LHE --datatier GEN --conditions MCRUN2_71_V1::All --step NONE --python_filename $GENcfg --no_exec --customise Configuration/DataProcessing/Utils.addMonitoring -n -1 &&
+    cmsRun $GENcfg &&
+    cmsDriver.py Configuration/GenProduction/python/ThirteenTeV/Hadronizer_TuneCUETP8M1_13TeV_generic_LHE_pythia8_Tauola_cff.py --filein file:$GENfile --fileout file:$GENSIMfile --mc --eventcontent RAWSIM --customise SLHCUpgradeSimulations/Configuration/postLS1Customs.customisePostLS1,Configuration/DataProcessing/Utils.addMonitoring --datatier GEN-SIM --conditions MCRUN2_71_V1::All --step GEN,SIM --magField 38T_PostLS1 --python_filename $GENSIMcfg --no_exec -n 10000 &&
+    cmsRun $GENSIMcfg
+done
